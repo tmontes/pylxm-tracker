@@ -1,7 +1,6 @@
 import datetime as dt
 import logging
 import re
-import zoneinfo
 
 import bs4
 
@@ -78,9 +77,7 @@ def _event_from_card(card) -> data.Event:
 
     if (time_tag := card.find('time')):
         when_text = str(time_tag['datetime'])
-        tz_match = re.search(r'\[([^\]]+)\]$', when_text)
-        tz = zoneinfo.ZoneInfo(tz_match.group(1)) if tz_match else dt.timezone.utc
-        when = dt.datetime.fromisoformat(re.sub(r'\[.*\]$', '', when_text)).replace(tzinfo=tz)
+        when = dt.datetime.fromisoformat(re.sub(r'\[.*\]$', '', when_text))
     else:
         when = None
 
