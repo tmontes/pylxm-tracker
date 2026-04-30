@@ -85,5 +85,22 @@ def render(ctx, output_dir):
     render_module.render(ctx.obj['db_path'], output_dir)
 
 
+@main.command()
+@click.argument('meetup_references', nargs=-1, default=DEFAULT_GROUP_REFERENCES)
+@click.option(
+    '--output-dir',
+    envvar='PYLXM_TRACKER_OUTPUT_DIR',
+    default='output',
+    show_default=True,
+    type=click.Path(),
+    help='Directory to write dashboard.html and chart.umd.min.js into.',
+)
+@click.pass_context
+def run(ctx, meetup_references, output_dir):
+    """Collect data and render the dashboard."""
+    ctx.invoke(collect, meetup_references=meetup_references)
+    ctx.invoke(render, output_dir=output_dir)
+
+
 if __name__ == '__main__':
     main()
