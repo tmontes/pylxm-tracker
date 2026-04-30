@@ -1,0 +1,24 @@
+[project]
+name = "pylxm-tracker"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Tiago Montes" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "click>=8.3.3",
+    "httpx>=0.28.1",
+]
+
+[project.scripts]
+pylxm-tracker = "pylxm_tracker.__main__:main"
+
+[tool.uv]
+exclude-newer = "P7D"
+
+[build-system]
+requires = ["uv_build>=0.11.8,<0.12.0"]
+build-backend = "uv_build"
