@@ -5,7 +5,7 @@ from importlib import metadata as ilm
 import click
 import httpx
 
-from . import db, xtract
+from . import db, render as render_module, xtract
 
 
 MEETUP_BASE_URL = 'https://www.meetup.com'
@@ -71,9 +71,18 @@ def collect(ctx, meetup_references):
 
 
 @main.command()
-def serve():
-    """Start the web server (not yet implemented)."""
-    ...
+@click.option(
+    '--output-dir',
+    envvar='PYLXM_TRACKER_OUTPUT_DIR',
+    default='output',
+    show_default=True,
+    type=click.Path(),
+    help='Directory to write dashboard.html and chart.umd.min.js into.',
+)
+@click.pass_context
+def render(ctx, output_dir):
+    """Render a static HTML dashboard from collected data."""
+    render_module.render(ctx.obj['db_path'], output_dir)
 
 
 if __name__ == '__main__':
