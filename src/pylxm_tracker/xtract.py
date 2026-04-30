@@ -7,13 +7,11 @@ import bs4
 from . import data
 
 
-
 log = logging.getLogger(__name__.split('.')[-1])
 
 
-
 def group_info_from_html(html: str) -> data.Group:
-
+    """Extract group metadata (name, members, rating) from a Meetup group page."""
     soup = bs4.BeautifulSoup(html, 'html.parser')
 
     h1 = soup.find('h1')
@@ -35,25 +33,29 @@ def group_info_from_html(html: str) -> data.Group:
     rating = float(rating_tag.get_text(strip=True)) if rating_tag else None
 
     ratings_link = soup.find('a', href=re.compile(r'feedback-overview'))
-    if ratings_link and (match := re.search(r'(\d+)', ratings_link.get_text(strip=True))):
+    if ratings_link and (
+        match := re.search(r'(\d+)', ratings_link.get_text(strip=True))
+    ):
         rating_count = int(match.group(1))
     else:
         rating_count = None
 
-    return data.Group(name=name, members=members, rating=rating, rating_count=rating_count)
-
+    return data.Group(
+        name=name, members=members, rating=rating, rating_count=rating_count
+    )
 
 
 def upcoming_events_from_html(html: str) -> list[data.Event]:
+    """Extract upcoming events from a Meetup group page."""
     soup = bs4.BeautifulSoup(html, 'html.parser')
     upcoming_h2 = soup.find(id='upcoming-section')
     if not upcoming_h2:
-        print('upcoming_h2 not found')
+        log.warning('upcoming_h2 not found')
         return []
     header_container = upcoming_h2.parent.parent
     events_ul = header_container.find_next_sibling('ul')
     if not events_ul:
-        print('events_ul not found')
+        log.warning('events_ul not found')
         return []
     return [
         _event_from_card(card)
@@ -61,9 +63,8 @@ def upcoming_events_from_html(html: str) -> list[data.Event]:
     ]
 
 
-
 def _event_from_card(card) -> data.Event:
-
+    """Parse a single event card element into an Event dataclass."""
     h3 = card.find('h3')
 
     ref = card.get('data-eventref')
@@ -75,7 +76,7 @@ def _event_from_card(card) -> data.Event:
     match = re.search(r'(\d+)\s+attendee', text, re.IGNORECASE)
     attendees = int(match.group(1)) if match else None
 
-    if (time_tag := card.find('time')):
+    if time_tag := card.find('time'):
         when_text = str(time_tag['datetime'])
         when = dt.datetime.fromisoformat(re.sub(r'\[.*\]$', '', when_text))
     else:

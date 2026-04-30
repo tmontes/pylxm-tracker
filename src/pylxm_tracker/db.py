@@ -6,7 +6,6 @@ import sqlite3
 from . import data
 
 
-
 _SCHEMA_MIGRATIONS = [
     (
         1,
@@ -56,6 +55,7 @@ _SCHEMA_MIGRATIONS_INSERT = """
 
 @contextlib.contextmanager
 def connection(db_path: str):
+    """Open a database connection, applying any pending schema migrations."""
     with sqlite3.connect(db_path, detect_types=sqlite3.PARSE_DECLTYPES) as dbc:
         dbc.execute(_SCHEMA_MIGRATIONS_CREATE)
         applied = {row[0] for row in dbc.execute(_SCHEMA_MIGRATIONS_SELECT)}
@@ -64,11 +64,13 @@ def connection(db_path: str):
                 dbc.execute(sql)
                 dbc.execute(
                     _SCHEMA_MIGRATIONS_INSERT,
-                    {'version': version, 'applied_at': dt.datetime.now(dt.timezone.utc)},
+                    {
+                        'version': version,
+                        'applied_at': dt.datetime.now(dt.timezone.utc),
+                    },
                 )
         yield dbc
     dbc.close()
-
 
 
 def insert_group(
@@ -77,6 +79,7 @@ def insert_group(
     group: data.Group,
     now: dt.datetime,
 ) -> None:
+    """Insert a group snapshot row into the groups table."""
     conn.execute(
         """
         INSERT INTO
@@ -97,6 +100,7 @@ def insert_events(
     events: list[data.Event],
     now: dt.datetime,
 ) -> None:
+    """Insert a batch of event snapshot rows into the events table."""
     conn.executemany(
         """
         INSERT INTO

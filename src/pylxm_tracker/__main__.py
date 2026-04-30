@@ -1,4 +1,6 @@
 import datetime as dt
+import logging
+from importlib import metadata as ilm
 
 import click
 import httpx
@@ -8,6 +10,18 @@ from . import db, xtract
 
 MEETUP_BASE_URL = 'https://www.meetup.com'
 DEFAULT_GROUP_REFERENCES = ('python-lisbon-meetup', 'python-lisbon')
+
+
+log = logging.getLogger(__package__)
+
+
+def _setup_logging():
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s %(levelname).1s %(name)s %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+    )
+    logging.getLogger('httpx').setLevel(logging.WARNING)
 
 
 @click.group()
@@ -21,14 +35,18 @@ DEFAULT_GROUP_REFERENCES = ('python-lisbon-meetup', 'python-lisbon')
 )
 @click.pass_context
 def main(ctx, db_path):
+    """Meetup group tracker CLI."""
     ctx.ensure_object(dict)
     ctx.obj['db_path'] = db_path
+    _setup_logging()
+    log.info(f'version {ilm.version(__package__)}')
 
 
 @main.command()
 @click.argument('meetup_references', nargs=-1, default=DEFAULT_GROUP_REFERENCES)
 @click.pass_context
 def collect(ctx, meetup_references):
+    """Fetch group info and upcoming events, storing them in the database."""
 
     collected = []
     for meetup_ref in meetup_references:
@@ -46,9 +64,15 @@ def collect(ctx, meetup_references):
             db.insert_group(dbc, meetup_ref, group_info, now)
             db.insert_events(dbc, meetup_ref, group_events, now)
 
+    for meetup_ref, group_info, group_events in collected:
+        log.info(f'{meetup_ref}: {group_info.members} members, {len(group_events)} events')
+
+    log.info('done')
+
 
 @main.command()
 def serve():
+    """Start the web server (not yet implemented)."""
     ...
 
 
