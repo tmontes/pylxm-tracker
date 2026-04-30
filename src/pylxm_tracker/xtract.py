@@ -8,6 +8,7 @@ import bs4
 from . import data
 
 
+
 log = logging.getLogger(__name__.split('.')[-1])
 
 
