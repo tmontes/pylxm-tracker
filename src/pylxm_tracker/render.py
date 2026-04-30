@@ -157,6 +157,8 @@ def _generate_html(groups: dict, events_by_group: dict) -> str:
         for meetup_ref, events in events_by_group.items()
     }
 
+    updated_at = dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
     tmpl = string.Template(
         _TEMPLATES.joinpath('index.html.tmpl').read_text(encoding='utf-8')
     )
@@ -165,6 +167,7 @@ def _generate_html(groups: dict, events_by_group: dict) -> str:
         rating_json=json.dumps(rating_datasets),
         count_json=json.dumps(count_datasets),
         events_json=json.dumps(events_payload),
+        updated_at=updated_at,
     )
 
 
