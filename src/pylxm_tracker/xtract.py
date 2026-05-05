@@ -23,11 +23,11 @@ def group_info_from_html(html: str) -> data.Group:
         members = None
     else:
         text = tag.get_text(strip=True)
-        if not (match := re.search(r'(\d+)', text)):
+        if not (match := re.search(r'(\d{1,3}(?:,\d{3})*)', text)):
             log.warning('no member count match in %r', text)
             members = None
         else:
-            members = int(match.group(1))
+            members = int(match.group(1).replace(',', ''))
 
     rating_tag = soup.find(string=re.compile(r'^\d+\.\d+$'))
     rating = float(rating_tag.get_text(strip=True)) if rating_tag else None
