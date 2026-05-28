@@ -125,9 +125,24 @@
         });
 
         // Returns a tooltip config that formats the x timestamp as a readable date.
-        const makeTooltip = () => ({
+        // With {withTotal: true}, uses x-mode so hovering one point in a stack
+        // surfaces every dataset that has a point at the same x value (not the
+        // same array index — datasets have different lengths here), plus a
+        // "Total" footer when 2+ entries share the x.
+        const makeTooltip = ({withTotal = false} = {}) => ({
+            ...(withTotal ? {
+                mode: 'x',
+                // Mirror the visual stack: top-of-stack dataset (higher index)
+                // appears at the top of the tooltip.
+                itemSort: (a, b) => b.datasetIndex - a.datasetIndex,
+            } : {}),
             callbacks: {
                 title: (items) => fmtDDMMMYYYY(items[0].parsed.x),
+                ...(withTotal ? {
+                    footer: (items) => items.length < 2
+                        ? ''
+                        : 'Total: ' + items.reduce((s, i) => s + i.parsed.y, 0),
+                } : {}),
             },
         });
 
@@ -233,13 +248,17 @@
             const _xMin = _whenDayMs - _leftSpan;
             const _xMax = _whenDayMs + _leftSpan / 14;
 
-            const datasets = bucket.events.map(e => ({
+            const datasets = bucket.events.map((e, i) => ({
                 label: e.event_name === e.group_label
                     ? e.group_label
                     : `$${e.group_label} — $${e.event_name}`,
                 data: e.data,
                 borderColor: e.color,
-                backgroundColor: e.color + '33',
+                backgroundColor: e.color + '66',
+                // Bottom-most series fills to zero; upper layers fill to the
+                // dataset directly below so the area shows the *increment* the
+                // stack adds, not the absolute value.
+                fill: i === 0 ? 'origin' : '-1',
                 tension: 0.3,
                 parsing: false,
             }));
@@ -254,13 +273,14 @@
                     plugins: {
                         legend: {display: true, position: 'bottom'},
                         title: {display: true, text: fmtDDMMMYYYY(_whenDayMs)},
-                        tooltip: makeTooltip(),
+                        tooltip: makeTooltip({withTotal: true}),
                         eventDate: {whenMs: _whenDayMs},
                     },
                     scales: {
                         x: {...makeEventXAxis(), min: _xMin, max: _xMax},
                         y: {
                             beginAtZero: true,
+                            stacked: true,
                             title: {display: true, text: 'Attendees'},
                         },
                     },

@@ -77,21 +77,29 @@ def _query_groups(conn: sqlite3.Connection) -> dict:
 
 
 def _query_events(conn: sqlite3.Connection) -> dict:
+    # Collapse the 4h-cadence collection points to one row per calendar day per
+    # event. Daily granularity both thins the chart and aligns x positions across
+    # datasets, which is what makes stacked-area rendering behave.
     rows = conn.execute(
         """
-        SELECT meetup_ref, ref, name, CAST("when" AS TEXT) AS when_str,
-               collected_ts, attendees
+        SELECT meetup_ref,
+               ref,
+               MAX(name) AS name,
+               MAX(CAST("when" AS TEXT)) AS when_str,
+               DATE(collected_ts) AS collected_day,
+               AVG(attendees) AS avg_attendees
         FROM events
         WHERE ref IS NOT NULL
           AND "when" >= datetime('now')
-        ORDER BY meetup_ref, ref, collected_ts
+        GROUP BY meetup_ref, ref, DATE(collected_ts)
+        ORDER BY meetup_ref, ref, DATE(collected_ts)
         """
     ).fetchall()
 
     # Group events by the date portion of `when` (YYYY-MM-DD). Two events sharing
     # the same date land in the same bucket and will be plotted on the same chart.
     by_date: dict[str, dict] = {}
-    for meetup_ref, ref, name, when_str, collected_ts, attendees in rows:
+    for meetup_ref, ref, name, when_str, collected_day, avg_attendees in rows:
         if not when_str:
             continue
         day_key = when_str[:10]
@@ -107,8 +115,8 @@ def _query_events(conn: sqlite3.Connection) -> dict:
         })
         if name is not None:
             event['event_name'] = name
-        if attendees is not None:
-            event['data'].append({'x': _to_ms(collected_ts), 'y': attendees})
+        if avg_attendees is not None:
+            event['data'].append({'x': _to_ms(collected_day), 'y': round(avg_attendees)})
 
     return by_date
 
@@ -150,6 +158,9 @@ def _generate_html(groups: dict, events_by_date: dict) -> str:
     ]
 
     # Ordered list of date-buckets; each bucket carries the lines to draw on one chart.
+    # Within a bucket, events are ordered by data-point count descending so the
+    # most populated series sits at the bottom of the stack and lighter ones layer
+    # on top.
     events_payload = [
         {
             'day_key': day_key,
@@ -161,7 +172,11 @@ def _generate_html(groups: dict, events_by_date: dict) -> str:
                     'color': color_by_ref.get(ev['group_ref'], _PALETTE[0]),
                     'data': ev['data'],
                 }
-                for ev in bucket['events'].values()
+                for ev in sorted(
+                    bucket['events'].values(),
+                    key=lambda e: len(e['data']),
+                    reverse=True,
+                )
             ],
         }
         for day_key, bucket in sorted(events_by_date.items())
