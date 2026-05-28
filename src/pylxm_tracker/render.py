@@ -79,7 +79,8 @@ def _query_groups(conn: sqlite3.Connection) -> dict:
 def _query_events(conn: sqlite3.Connection) -> dict:
     rows = conn.execute(
         """
-        SELECT meetup_ref, ref, name, CAST("when" AS TEXT), collected_ts, attendees
+        SELECT meetup_ref, ref, name, CAST("when" AS TEXT) AS when_str,
+               collected_ts, attendees
         FROM events
         WHERE ref IS NOT NULL
           AND "when" >= datetime('now')
@@ -87,32 +88,32 @@ def _query_events(conn: sqlite3.Connection) -> dict:
         """
     ).fetchall()
 
-    by_group: dict[str, dict] = {}
-    for meetup_ref, ref, name, when, collected_ts, attendees in rows:
-        group_events = by_group.setdefault(meetup_ref, {})
-        if ref not in group_events:
-            group_events[ref] = {
-                'name': name or ref,
-                'when_ms': _to_ms(when) if when is not None else None,
-                'data': [],
-            }
-        event = group_events[ref]
+    # Group events by the date portion of `when` (YYYY-MM-DD). Two events sharing
+    # the same date land in the same bucket and will be plotted on the same chart.
+    by_date: dict[str, dict] = {}
+    for meetup_ref, ref, name, when_str, collected_ts, attendees in rows:
+        if not when_str:
+            continue
+        day_key = when_str[:10]
+        bucket = by_date.setdefault(day_key, {
+            'when_ms': _to_ms(when_str),
+            'events': {},
+        })
+        ekey = (meetup_ref, ref)
+        event = bucket['events'].setdefault(ekey, {
+            'group_ref': meetup_ref,
+            'event_name': name or ref,
+            'data': [],
+        })
         if name is not None:
-            event['name'] = name
-        ts_ms = _to_ms(collected_ts)
+            event['event_name'] = name
         if attendees is not None:
-            event['data'].append({'x': ts_ms, 'y': attendees})
+            event['data'].append({'x': _to_ms(collected_ts), 'y': attendees})
 
-    # Sort each group's events by event date
-    return {
-        meetup_ref: dict(
-            sorted(events.items(), key=lambda kv: kv[1]['when_ms'] or 0)
-        )
-        for meetup_ref, events in by_group.items()
-    }
+    return by_date
 
 
-def _generate_html(groups: dict, events_by_group: dict) -> str:
+def _generate_html(groups: dict, events_by_date: dict) -> str:
     refs = list(groups.keys())
     colors = [_PALETTE[i % len(_PALETTE)] for i in range(len(refs))]
     color_by_ref = {ref: colors[i] for i, ref in enumerate(refs)}
@@ -148,15 +149,23 @@ def _generate_html(groups: dict, events_by_group: dict) -> str:
         for i, ref in enumerate(refs)
     ]
 
-    # Per-event data: attach the group color so JS can use it
-    events_payload = {
-        meetup_ref: {
-            'label': groups.get(meetup_ref, {}).get('label', meetup_ref),
-            'color': color_by_ref.get(meetup_ref, _PALETTE[0]),
-            'events': events,
+    # Ordered list of date-buckets; each bucket carries the lines to draw on one chart.
+    events_payload = [
+        {
+            'day_key': day_key,
+            'when_ms': bucket['when_ms'],
+            'events': [
+                {
+                    'group_label': groups.get(ev['group_ref'], {}).get('label', ev['group_ref']),
+                    'event_name': ev['event_name'],
+                    'color': color_by_ref.get(ev['group_ref'], _PALETTE[0]),
+                    'data': ev['data'],
+                }
+                for ev in bucket['events'].values()
+            ],
         }
-        for meetup_ref, events in events_by_group.items()
-    }
+        for day_key, bucket in sorted(events_by_date.items())
+    ]
 
     updated_at = dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
@@ -182,9 +191,9 @@ def render(db_path: str, output_dir: str) -> None:
 
     with db.connection(db_path) as conn:
         groups = _query_groups(conn)
-        events_by_group = _query_events(conn)
+        events_by_date = _query_events(conn)
 
-    html = _generate_html(groups, events_by_group)
+    html = _generate_html(groups, events_by_date)
     html_path = out / DASHBOARD_FILENAME
     html_path.write_text(html, encoding='utf-8')
     log.info(f'dashboard written to {html_path}')

@@ -203,73 +203,69 @@
             },
         });
 
-        // Per-group, per-event charts
+        // One chart per upcoming event date; events sharing a date become separate
+        // lines on the same chart (and therefore share its horizontal scale).
         const section = document.getElementById('eventsSection');
-        for (const [meetupRef, group] of Object.entries(eventsData)) {
-            const heading = document.createElement('h2');
-            heading.textContent = group.label;
-            section.appendChild(heading);
+        const grid = document.createElement('div');
+        grid.className = 'events-grid';
+        section.appendChild(grid);
 
-            const grid = document.createElement('div');
-            grid.className = 'events-grid';
-            section.appendChild(grid);
+        for (const bucket of eventsData) {
+            const card = document.createElement('div');
+            card.className = 'card';
+            const canvas = document.createElement('canvas');
+            card.appendChild(canvas);
+            grid.appendChild(card);
 
-            for (const [eventRef, event] of Object.entries(group.events)) {
-                const card = document.createElement('div');
-                card.className = 'card';
-                const canvas = document.createElement('canvas');
-                card.appendChild(canvas);
-                grid.appendChild(card);
+            // Normalise event time to local midnight so the event line coincides
+            // with the Thursday tick (which afterBuildTicks also snaps to midnight).
+            const _whenDay = new Date(bucket.when_ms);
+            _whenDay.setHours(0, 0, 0, 0);
+            const _whenDayMs = _whenDay.getTime();
 
-                // Normalise event time to local midnight so the event line coincides
-                // with the Thursday tick (which afterBuildTicks also snaps to midnight).
-                const _whenDay = new Date(event.when_ms);
-                _whenDay.setHours(0, 0, 0, 0);
-                const _whenDayMs = _whenDay.getTime();
+            // X-axis range: event line sits at 14/15 of total width.
+            // Left span is at least 2 weeks; expands if any line reaches further back.
+            const allX = bucket.events.flatMap(e => e.data.map(p => p.x));
+            const _dataMin = allX.length > 0
+                ? Math.min(...allX)
+                : _whenDayMs - 14 * 86400000;
+            const _leftSpan = Math.max(_whenDayMs - _dataMin + 86400000, 14 * 86400000);
+            const _xMin = _whenDayMs - _leftSpan;
+            const _xMax = _whenDayMs + _leftSpan / 14;
 
-                const eventDateLabel = event.when_ms ? fmtDDMMMYYYY(_whenDayMs) : '';
+            const datasets = bucket.events.map(e => ({
+                label: e.event_name === e.group_label
+                    ? e.group_label
+                    : `$${e.group_label} — $${e.event_name}`,
+                data: e.data,
+                borderColor: e.color,
+                backgroundColor: e.color + '33',
+                tension: 0.3,
+                parsing: false,
+            }));
 
-                // X-axis range: event line sits at 14/15 of total width.
-                // Left span is at least 2 weeks; expands if data reaches further back.
-                const _dataMin = event.data.length > 0
-                    ? Math.min(...event.data.map(p => p.x))
-                    : _whenDayMs - 14 * 86400000;
-                const _leftSpan = Math.max(_whenDayMs - _dataMin + 86400000, 14 * 86400000);
-                const _xMin = _whenDayMs - _leftSpan;
-                const _xMax = _whenDayMs + _leftSpan / 14;
-
-                new Chart(canvas, {
-                    type: 'line',
-                    data: {
-                        datasets: [{
-                            label: event.name,
-                            data: event.data,
-                            borderColor: group.color,
-                            backgroundColor: group.color + '33',
-                            tension: 0.3,
-                            parsing: false,
-                        }],
+            new Chart(canvas, {
+                type: 'line',
+                data: {datasets},
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    parsing: false,
+                    plugins: {
+                        legend: {display: true, position: 'bottom'},
+                        title: {display: true, text: fmtDDMMMYYYY(_whenDayMs)},
+                        tooltip: makeTooltip(),
+                        eventDate: {whenMs: _whenDayMs},
                     },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        parsing: false,
-                        plugins: {
-                            legend: {display: false},
-                            title: {display: true, text: [event.name, eventDateLabel]},
-                            tooltip: makeTooltip(),
-                            eventDate: {whenMs: _whenDayMs},
-                        },
-                        scales: {
-                            x: {...makeEventXAxis(), min: _xMin, max: _xMax},
-                            y: {
-                                beginAtZero: true,
-                                title: {display: true, text: 'Attendees'},
-                            },
+                    scales: {
+                        x: {...makeEventXAxis(), min: _xMin, max: _xMax},
+                        y: {
+                            beginAtZero: true,
+                            title: {display: true, text: 'Attendees'},
                         },
                     },
-                });
-            }
+                },
+            });
         }
     </script>
     <footer style="margin-top:2rem;font-size:0.75rem;color:#6c757d;">
