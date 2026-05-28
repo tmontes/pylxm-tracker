@@ -52,26 +52,34 @@ def _to_ms(value) -> int:
 
 
 def _query_groups(conn: sqlite3.Connection) -> dict:
+    # Collapse to one row per calendar day per group so the charts aren't
+    # crowded with the 4h-cadence samples. Same approach as `_query_events`.
     rows = conn.execute(
         """
-        SELECT meetup_ref, name, collected_ts, members, rating, rating_count
+        SELECT meetup_ref,
+               MAX(name) AS name,
+               DATE(collected_ts) AS collected_day,
+               AVG(members) AS members,
+               AVG(rating) AS rating,
+               AVG(rating_count) AS rating_count
         FROM groups
-        ORDER BY meetup_ref, collected_ts
+        GROUP BY meetup_ref, DATE(collected_ts)
+        ORDER BY meetup_ref, DATE(collected_ts)
         """
     ).fetchall()
 
     by_ref: dict[str, dict] = {}
-    for meetup_ref, name, collected_ts, members, rating, rating_count in rows:
+    for meetup_ref, name, collected_day, members, rating, rating_count in rows:
         series = by_ref.setdefault(meetup_ref, {'label': meetup_ref, 'members': [], 'rating': [], 'rating_count': []})
         if name is not None:
             series['label'] = name
-        ts_ms = _to_ms(collected_ts)
+        ts_ms = _to_ms(collected_day)
         if members is not None:
-            series['members'].append({'x': ts_ms, 'y': members})
+            series['members'].append({'x': ts_ms, 'y': round(members)})
         if rating is not None:
-            series['rating'].append({'x': ts_ms, 'y': rating})
+            series['rating'].append({'x': ts_ms, 'y': round(rating, 2)})
         if rating_count is not None:
-            series['rating_count'].append({'x': ts_ms, 'y': rating_count})
+            series['rating_count'].append({'x': ts_ms, 'y': round(rating_count)})
 
     return by_ref
 

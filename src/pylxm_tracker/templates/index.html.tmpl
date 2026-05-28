@@ -232,10 +232,11 @@
             card.appendChild(canvas);
             grid.appendChild(card);
 
-            // Normalise event time to local midnight so the event line coincides
-            // with the Thursday tick (which afterBuildTicks also snaps to midnight).
+            // Pin the event-date line to 19:00 local time on the event day
+            // (Meetup events typically start around 7pm). The chart range below
+            // is anchored to this same instant.
             const _whenDay = new Date(bucket.when_ms);
-            _whenDay.setHours(0, 0, 0, 0);
+            _whenDay.setHours(19, 0, 0, 0);
             const _whenDayMs = _whenDay.getTime();
 
             // X-axis range: event line sits at 14/15 of total width.
