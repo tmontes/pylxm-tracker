@@ -82,6 +82,7 @@ def _query_events(conn: sqlite3.Connection) -> dict:
         SELECT meetup_ref, ref, name, CAST("when" AS TEXT), collected_ts, attendees
         FROM events
         WHERE ref IS NOT NULL
+          AND "when" >= datetime('now')
         ORDER BY meetup_ref, ref, collected_ts
         """
     ).fetchall()
