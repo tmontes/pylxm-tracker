@@ -17,6 +17,11 @@
         h1 { font-size: 1.25rem; font-weight: 600; margin: 0 0 2rem; }
         h2 { font-size: 0.875rem; font-weight: 600; text-transform: uppercase;
               letter-spacing: .05em; color: #6c757d; margin: 0 0 0.75rem; }
+        h2.collapsible { cursor: pointer; user-select: none; }
+        h2.collapsible::before { content: '▶\00a0'; font-size: 0.6rem; vertical-align: middle; }
+        h2.collapsible.open::before { content: '▼\00a0'; }
+        .collapsible-body { overflow: hidden; }
+        .collapsible-body.collapsed { display: none; }
         h3 { font-size: 0.875rem; font-weight: 600; margin: 1.5rem 0 0.75rem; }
         .card {
             background: #fff;
@@ -27,15 +32,15 @@
             position: relative;
             height: 360px;
         }
-        .events-grid {
+        .two-col {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
             gap: 1rem;
-            margin-bottom: 2rem;
+            margin-bottom: 1.5rem;
         }
+        .two-col .card { margin-bottom: 0; }
         .events-grid .card {
-            height: 260px;
-            margin-bottom: 0;
+            height: 360px;
         }
     </style>
 </head>
@@ -47,20 +52,33 @@
         <canvas id="membersChart"></canvas>
     </div>
 
-    <h2>Rating over time</h2>
-    <div class="card">
-        <canvas id="ratingChart"></canvas>
-    </div>
-
-    <h2>Review count over time</h2>
-    <div class="card">
-        <canvas id="countChart"></canvas>
+    <h2 class="collapsible" onclick="toggleSection(this)">Rating and Review Count over time</h2>
+    <div class="collapsible-body collapsed">
+        <div class="two-col">
+            <div class="card"><canvas id="ratingChart"></canvas></div>
+            <div class="card"><canvas id="countChart"></canvas></div>
+        </div>
     </div>
 
     <h1>Upcoming Events</h1>
     <div id="eventsSection"></div>
 
     <script>
+        function toggleSection(h2) {
+            const body = h2.nextElementSibling;
+            const collapsed = body.classList.toggle('collapsed');
+            h2.classList.toggle('open', !collapsed);
+            if (!collapsed) {
+                // Let the browser lay out the element, then resize all charts inside it.
+                requestAnimationFrame(() => {
+                    body.querySelectorAll('canvas').forEach(canvas => {
+                        const chart = Chart.getChart(canvas);
+                        if (chart) chart.resize();
+                    });
+                });
+            }
+        }
+
         const membersDatasets = ${members_json};
         const ratingDatasets = ${rating_json};
         const countDatasets = ${count_json};
